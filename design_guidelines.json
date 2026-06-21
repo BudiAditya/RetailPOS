@@ -1,0 +1,140 @@
+{
+  "project_domain": "Retail Grocery POS User Interface",
+  "theme": "Light/High-Contrast Industrial (Legacy Software)",
+  "archetype": "Swiss & High-Contrast (Adapted for Utilitarian Retail)",
+  "typography": {
+    "font_imports": [
+      "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');"
+    ],
+    "families": {
+      "chrome": "'IBM Plex Sans', sans-serif",
+      "data": "'IBM Plex Mono', monospace"
+    },
+    "scales": {
+      "big_total": "text-6xl sm:text-[56px] leading-none font-bold tracking-tight",
+      "h1": "text-2xl font-bold tracking-tight",
+      "h2": "text-xl font-semibold",
+      "h3": "text-lg font-medium",
+      "grid_row": "text-sm font-medium",
+      "f_key": "text-sm font-bold",
+      "status": "text-xs font-semibold uppercase tracking-wider"
+    },
+    "rules": {
+      "data_alignment": "Right-align all numbers, prices, and quantities. Use tabular-nums utility.",
+      "chrome_alignment": "Left-align labels and interface text."
+    }
+  },
+  "colors": {
+    "background": {
+      "app": "bg-slate-100",
+      "grid": "bg-white",
+      "panel": "bg-slate-50"
+    },
+    "surface": {
+      "header": "bg-slate-900",
+      "total_panel": "bg-blue-700",
+      "status_bar": "bg-slate-800"
+    },
+    "text": {
+      "primary": "text-slate-900",
+      "secondary": "text-slate-600",
+      "on_dark": "text-white",
+      "total": "text-white"
+    },
+    "borders": {
+      "default": "border-slate-300",
+      "dark": "border-slate-700",
+      "focus": "border-blue-600"
+    },
+    "f_keys": {
+      "group_nav": {
+        "bg": "bg-slate-200",
+        "text": "text-slate-800",
+        "border": "border-slate-400",
+        "shadow": "shadow-[0_2px_0_0_#94a3b8]",
+        "active": "active:shadow-none active:translate-y-[2px]"
+      },
+      "group_action": {
+        "bg": "bg-teal-600",
+        "text": "text-white",
+        "border": "border-teal-800",
+        "shadow": "shadow-[0_2px_0_0_#115e59]",
+        "active": "active:shadow-none active:translate-y-[2px]"
+      },
+      "group_admin": {
+        "bg": "bg-amber-500",
+        "text": "text-slate-900",
+        "border": "border-amber-700",
+        "shadow": "shadow-[0_2px_0_0_#b45309]",
+        "active": "active:shadow-none active:translate-y-[2px]"
+      },
+      "group_danger": {
+        "bg": "bg-red-600",
+        "text": "text-white",
+        "border": "border-red-800",
+        "shadow": "shadow-[0_2px_0_0_#991b1b]",
+        "active": "active:shadow-none active:translate-y-[2px]"
+      }
+    },
+    "status_indicators": {
+      "online": "bg-green-500",
+      "offline": "bg-red-500",
+      "sync_pending": "bg-yellow-400"
+    },
+    "forbidden_colors": ["purple", "violet", "fuchsia", "teal gradients", "AI slop styling"]
+  },
+  "spacing_and_layout": {
+    "base_layout": "Strict 100vh h-screen w-screen overflow-hidden flex flex-col. No global scroll. Inner scroll only inside DataGrid.",
+    "density": "Dense. Use padding steps: p-1, p-2, p-3. Maximum standard padding is p-4.",
+    "radius": "Sharp. Use rounded-none or rounded-sm (2px max). Do not use rounded-lg, rounded-xl, or pill shapes.",
+    "grid_row_height": "h-8 (32px) or h-[28px]. Tight vertical padding py-1.",
+    "borders": "1px solid everywhere. Use border-collapse for DataGrid items."
+  },
+  "components": {
+    "DataGrid": {
+      "container": "border border-slate-300 bg-white flex-1 overflow-y-auto",
+      "header": "bg-slate-200 border-b border-slate-400 font-bold text-xs uppercase tracking-wider text-slate-700 sticky top-0 z-10",
+      "row": "border-b border-slate-200 even:bg-slate-50 hover:bg-blue-50 transition-colors font-data text-sm h-8 flex items-center cursor-pointer",
+      "selected_row": "bg-blue-600 text-white hover:bg-blue-700 border-blue-800"
+    },
+    "BigTotal": {
+      "container": "bg-blue-700 p-4 flex flex-col justify-end items-end border-b-4 border-blue-900 min-h-[120px] shadow-inner",
+      "label": "text-blue-200 text-sm font-bold uppercase tracking-wider",
+      "value": "font-data text-[56px] font-bold text-white leading-none tracking-tight tabular-nums drop-shadow-md"
+    },
+    "FKeyButton": {
+      "container": "flex flex-col items-center justify-center p-2 border rounded-sm transition-all duration-75 select-none cursor-pointer h-16 relative",
+      "key_label": "absolute top-1 left-1 text-[10px] font-data font-bold opacity-70",
+      "action_label": "text-sm font-bold leading-tight text-center mt-2"
+    },
+    "StatusBar": {
+      "container": "h-8 bg-slate-900 text-slate-300 flex items-center justify-between px-4 text-xs font-data border-t-2 border-slate-700",
+      "indicator_dot": "w-2 h-2 rounded-full shadow-[0_0_4px_currentColor]"
+    },
+    "ScanInput": {
+      "container": "flex items-center gap-2 bg-slate-900 p-2 border-b-4 border-slate-700",
+      "input": "bg-white border-2 border-blue-500 rounded-sm px-3 py-2 font-data text-lg w-full focus:outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 shadow-inner"
+    }
+  },
+  "icons": {
+    "library": "lucide-react",
+    "usage": "Use sparingly. Prefer text labels. Use icons mainly for status bar, delivery/customer panel, and critical actions like Lock/Unlock shift."
+  },
+  "interactions_and_motion": {
+    "animations": "Extremely minimal. Snappy immediate state changes. No fade-ins, no sliding panels. Use zero duration or 75ms max transitions for button presses.",
+    "hover_states": "Hard color shifts. E.g., hover:bg-slate-300, no opacity fades.",
+    "focus": "Aggressive focus rings on active inputs (focus:ring-2 focus:ring-blue-600 focus:outline-none)."
+  },
+  "testing": {
+    "data_testid_rules": "All interactive and key informational elements MUST include a 'data-testid' attribute. Kebab-case, role-based. E.g., 'data-testid=\"pos-scan-input\"', 'data-testid=\"fkey-payment\"', 'data-testid=\"big-total-display\"'."
+  },
+  "instructions_to_main_agent": [
+    "This is a FRONTEND-ONLY implementation using Dexie/IndexedDB for local storage.",
+    "Build a classic desktop workstation POS, NOT a modern cloud dashboard.",
+    "Enforce keyboard-first usage: Implement a global keydown listener to bind F1-F12 keys to their respective functions.",
+    "Layout structure should be: Top Header (Cashier Name, Shift Info) -> Left: DataGrid & Scan Input -> Right: Customer Panel & Big Total -> Bottom: F-Key rows -> Absolute Bottom: Status Bar.",
+    "Use IDR formatting for currency: Use a helper function to format numbers like '57.500'. Tabular nums are critical.",
+    "Components must use pure Tailwind classes mapped to the guidelines above. Do NOT use Shadcn Card component if it adds too much padding and rounded-xl borders. Strip Shadcn defaults to match the sharp, dense legacy POS vibe.",
+    "Implement the UI directly in React/JS/Tailwind."
+  ]
+}
