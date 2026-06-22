@@ -3,12 +3,13 @@ import { db } from '../db/database';
 import { uid, nowISO } from '../lib/format';
 
 const calcLine = (it) => {
-  const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+  const sign = (Number(it.qty) || 0) < 0 ? -1 : 1;
+  const grossAbs = Math.abs(Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
   const discAmt =
     (Number(it.discPct) || 0) > 0
-      ? gross * ((Number(it.discPct) || 0) / 100)
+      ? grossAbs * ((Number(it.discPct) || 0) / 100)
       : Number(it.discAmount) || 0;
-  return Math.max(0, gross - discAmt);
+  return sign * Math.max(0, grossAbs - discAmt);
 };
 
 const recompute = (items) => items.map((it) => ({ ...it, lineTotal: calcLine(it) }));

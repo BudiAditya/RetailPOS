@@ -52,8 +52,15 @@ export const api = {
   },
 
   async listTransactions({ shiftId } = {}) {
-    if (!shiftId) return db.transactions.orderBy('createdAt').reverse().toArray();
-    return db.transactions.where('shiftId').equals(shiftId).toArray();
+    const rows = shiftId
+      ? await db.transactions.where('shiftId').equals(shiftId).toArray()
+      : await db.transactions.orderBy('createdAt').reverse().toArray();
+    return Promise.all(
+      rows.map(async (t) => ({
+        ...t,
+        items: await db.transaction_items.where('transactionId').equals(t.id).toArray(),
+      })),
+    );
   },
 
   async createReturn({ originalTrxId, items, reason, shiftId, cashierId }) {

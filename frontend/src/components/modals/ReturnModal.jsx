@@ -23,7 +23,7 @@ export default function ReturnModal({ open, onOpenChange }) {
   }, [open]);
 
   const total = selected
-    ? selected.items.reduce((s, it) => {
+    ? (selected.items || []).reduce((s, it) => {
         const q = Number(picked[it.id] || 0);
         const unit = it.qty !== 0 ? it.lineTotal / it.qty : 0;
         return s + q * unit;
@@ -33,7 +33,7 @@ export default function ReturnModal({ open, onOpenChange }) {
   const submit = async () => {
     if (!selected) return toast.error('Pilih transaksi asal terlebih dahulu.');
     if (!reason.trim()) return toast.error('Wajib mengisi alasan retur.');
-    const items = selected.items
+    const items = (selected.items || [])
       .filter((it) => Number(picked[it.id] || 0) > 0)
       .map((it) => {
         const unit = it.qty !== 0 ? it.lineTotal / it.qty : 0;
@@ -82,7 +82,7 @@ export default function ReturnModal({ open, onOpenChange }) {
                     <span>{formatIDR(t.grandTotal)}</span>
                   </div>
                   <div className={selected?.id === t.id ? 'text-blue-100' : 'text-slate-500'}>
-                    {formatDateTime(t.createdAt)} · {t.items.length} item
+                    {formatDateTime(t.createdAt)} · {(t.items || []).length} item
                   </div>
                 </button>
               ))
@@ -97,7 +97,7 @@ export default function ReturnModal({ open, onOpenChange }) {
               {!selected ? (
                 <div className="p-4 text-sm text-slate-500 font-pos-mono">Pilih transaksi di kiri untuk melihat item.</div>
               ) : (
-                selected.items.map((it) => {
+                selected.items?.map?.((it) => {
                   const max = Math.abs(it.qty);
                   return (
                     <div key={it.id} className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-200 font-pos-mono text-xs">
