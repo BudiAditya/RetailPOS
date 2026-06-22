@@ -1,0 +1,33 @@
+{
+  "summary": "Full e2e of the NEW hybrid Send Digital Receipt feature. BACKEND (pytest, 6/6 PASS via REACT_APP_BACKEND_URL): GET /api/receipt/integrations -> 200 {whatsapp.configured:false missing:[TWILIO_ACCOUNT_SID,TWILIO_AUTH_TOKEN,TWILIO_WHATSAPP_FROM], email.configured:false missing:[RESEND_API_KEY,RESEND_FROM_EMAIL]}. POST /api/receipt/send {channel:whatsapp} -> 501 detail.message='Twilio belum dikonfigurasi.' detail.missing=[3 keys]. POST /api/receipt/send {channel:email} -> 501 detail.message='Resend belum dikonfigurasi.' detail.missing=[2 keys]. Invalid channel -> 422 (pydantic Literal). Regression: GET /api/status -> 200 list, POST /api/status persists+round-trips OK. FRONTEND e2e (Playwright, all checks PASS): cleared localStorage+IndexedDB, login cashier/1234, open shift 500000, scan 8991111000011 + 8994444000066, F5, cash 200000, payment-confirm -> Receipt modal TRX-20260622-0001 opens with all 6 buttons present (receipt-print-btn, receipt-usb-btn, receipt-download-btn, receipt-copy-btn, receipt-close-btn, NEW receipt-send-btn). Click send-btn -> SendReceiptModal opens with default WHATSAPP channel. send-api-status pill = amber with text '⚠ API whatsapp belum dikonfigurasi (set env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM). Gunakan tombol manual di bawah — selalu jalan.' Phone '081234567890' -> send-wa-link-btn href starts EXACTLY with 'https://wa.me/6281234567890?text=' and the urldecoded body contains 'TOKO MAJU JAYA', 'TRX-20260622-0001', item names (INDOMIE/BERAS) and 'TOTAL'. Switch to EMAIL -> pill updates to amber with 'RESEND_API_KEY, RESEND_FROM_EMAIL'. Type 'customer@example.com' -> send-mailto-btn href starts with 'mailto:customer@example.com?subject=Struk%20TRX-20260622-0001%20%E2%80%94%20TOKO%20MAJU%20JAYA&body=...'. send-qr-canvas is 192x192 and toDataURL returns 2090 chars valid PNG (data:image/png;base64,iVBORw0K...). Click send-api-btn on EMAIL -> 501 -> sonner toast 'API belum aktif — set env: RESEND_API_KEY, RESEND_FROM_EMAIL. Gunakan tombol link manual.' Modal stays open (does NOT crash). Back to WA + click send-api-btn -> 501 -> toast 'API belum aktif — set env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_FROM...'. ESC closes send modal, receipt-modal still open, receipt-download-btn click OK (no crash), receipt-close-btn closes the modal. All 10 spec scenarios PASS.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_receipt_send.py",
+    "/app/test_reports/pytest/receipt_send_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py uses module-level snapshot of env vars (TWILIO_*, RESEND_*) at import time — works for the current 'unset' test path, but if user adds keys later they must `sudo supervisorctl restart backend` because os.environ.get is evaluated once. This is fine but worth surfacing in user-facing docs/toast (toast already says 'set env... restart backend' on the button hint). Recommend adding a small note in README/PRD.",
+    "SendReceiptModal.jsx line 58: normalizedPhone replaces leading 0 with 62 via `.replace(/^0/, '62')`, but if user types '+62812...' the '+' is stripped first then nothing matches '^0' so output is '62812...' — correct. However if user types '62812...' (no +, no leading 0), it stays '62812...' — also correct. Edge case: '00628...' (intl prefix) becomes '628...' (still correct). LGTM.",
+    "Backend send_receipt() returns HTTPException(detail=dict). FastAPI wraps as {detail: {...}}. Frontend reads data?.detail?.missing — matches. Good.",
+    "Receipt body sent to WA/email via wa.me link is up to ~3-4KB after urlencoding for a small cart; WhatsApp's wa.me URL length cap is ~64K so OK for typical receipts. Long carts (>50 items) may exceed but acceptable.",
+    "QR encodes a compact summary (store, trxNumber, total, paid, change) — readable at 192px. Good UX choice.",
+    "Carry-over (LOW from iter 3): Radix DialogContent a11y warning (missing DialogDescription) now applies to SendReceiptModal as well — cosmetic console-only.",
+    "Optional enhancement (NOT a bug): If user clicks send-api-btn without typing 'to' first, frontend correctly toasts 'Masukkan nomor WhatsApp / Masukkan alamat email' and bails before network call — verified by code review (line 64)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_receipt_send.py (new)"
+  ],
+  "success_rate": {"backend": "100% (6/6 pytest)", "frontend": "100% (10/10 acceptance scenarios)"},
+  "test_credentials": "cashier / 1234 (verified)",
+  "seed_data_creation": "None. seedIfEmpty auto-seeded products/customers/users. IndexedDB + localStorage cleared at start of e2e run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Hybrid Send Receipt feature fully PASS in 'env-keys-not-set' mode. Future testing if/when env keys ARE provided: (a) Mock Twilio Client + Resend.send in pytest with monkeypatch, assert 200 + receipt_dispatch insert. (b) Verify provider_id is recorded in MongoDB. (c) Verify rate-limiting / retries on provider 5xx. Also good to add: customer prefill check (when trx.customer.phone exists, send-to-input should auto-fill — code path exists at SendReceiptModal lines 33-38 but not exercised in this run because mock customer was not attached). Backend test file at /app/backend/tests/test_receipt_send.py is the regression suite — re-run with `pytest /app/backend/tests/test_receipt_send.py -v` after any backend change.",
+  "rca of the issue": "No issues. Hybrid design works as specified: wa.me + mailto + QR always work (zero-config), API path returns graceful 501 with the exact missing env var names so the frontend toast is informational and self-explanatory. Modal does not crash on 501 — sendViaApi() switches on res.status===501 and uses toast.warning, then setBusy(false) in finally. Verified live."
+}

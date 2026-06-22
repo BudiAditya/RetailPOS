@@ -2,8 +2,9 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DEFAULT_STORE, renderReceiptText, renderReceiptEscPos, printViaWebUSB } from '@/lib/escpos';
 import { formatIDR } from '@/lib/format';
-import { Printer, Download, Usb, Copy, X } from 'lucide-react';
+import { Printer, Download, Usb, Copy, X, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import SendReceiptModal from './SendReceiptModal';
 
 export const RECEIPT_TESTIDS = {
   modal: 'receipt-modal',
@@ -13,11 +14,13 @@ export const RECEIPT_TESTIDS = {
   usbBtn: 'receipt-usb-btn',
   copyBtn: 'receipt-copy-btn',
   closeBtn: 'receipt-close-btn',
+  sendBtn: 'receipt-send-btn',
 };
 
 export default function ReceiptModal({ open, onOpenChange, trx, store = DEFAULT_STORE }) {
   const text = React.useMemo(() => (trx ? renderReceiptText(trx, store) : ''), [trx, store]);
   const lines = React.useMemo(() => text.split('\n'), [text]);
+  const [sendOpen, setSendOpen] = React.useState(false);
 
   const handlePrint = () => {
     // Use the @media print stylesheet — only #receipt-print is shown
@@ -123,6 +126,14 @@ export default function ReceiptModal({ open, onOpenChange, trx, store = DEFAULT_
                   hint="Membuka dialog cetak — gunakan printer thermal 80mm"
                 />
                 <ActionBtn
+                  testid={RECEIPT_TESTIDS.sendBtn}
+                  onClick={() => setSendOpen(true)}
+                  tone="emerald"
+                  icon={<Send className="h-4 w-4" />}
+                  label="Kirim Digital (WhatsApp / Email)"
+                  hint="wa.me + mailto + QR + Auto-API (Twilio / Resend)"
+                />
+                <ActionBtn
                   testid={RECEIPT_TESTIDS.usbBtn}
                   onClick={handleUSB}
                   tone="teal"
@@ -157,6 +168,7 @@ export default function ReceiptModal({ open, onOpenChange, trx, store = DEFAULT_
           </div>
         </DialogContent>
       </Dialog>
+      <SendReceiptModal open={sendOpen} onOpenChange={setSendOpen} trx={trx} store={store} />
     </>
   );
 }
@@ -179,6 +191,7 @@ function ActionBtn({ onClick, tone, icon, label, hint, testid }) {
   const tones = {
     primary: 'bg-blue-700 hover:bg-blue-800 active:bg-blue-900 text-white border-blue-900',
     teal: 'bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white border-teal-800',
+    emerald: 'bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white border-emerald-800',
     amber: 'bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-900 border-amber-700',
     slate: 'bg-slate-200 hover:bg-slate-300 active:bg-slate-400 text-slate-900 border-slate-400',
     danger: 'bg-red-600 hover:bg-red-700 active:bg-red-800 text-white border-red-800',
