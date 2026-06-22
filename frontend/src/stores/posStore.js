@@ -175,10 +175,11 @@ export const usePosStore = create((set, get) => ({
       status: 'COMPLETED',
       createdAt: nowISO(),
     };
+    const itemRows = items.map((it) => ({ ...it, transactionId: trx.id }));
     await db.transactions.add(trx);
-    await db.transaction_items.bulkAdd(items.map((it) => ({ ...it, transactionId: trx.id })));
+    await db.transaction_items.bulkAdd(itemRows);
     await db.sync_queue.add({ entity: 'transactions', op: 'create', refId: trx.id, createdAt: nowISO() });
     set({ items: [], customer: null, deliveryMethod: 'TAKE AWAY', selectedIndex: -1, mode: 'SALE', trxNumber: newTrxNumber() });
-    return trx;
+    return { ...trx, items: itemRows };
   },
 }));

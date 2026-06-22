@@ -15,6 +15,7 @@ import ProductSearchModal from '@/components/modals/ProductSearchModal';
 import PendingModal from '@/components/modals/PendingModal';
 import CustomerLookupModal from '@/components/modals/CustomerLookupModal';
 import TransactionListModal from '@/components/modals/TransactionListModal';
+import ReceiptModal from '@/components/modals/ReceiptModal';
 import { useAuthStore } from '@/stores/authStore';
 import { useShiftStore } from '@/stores/shiftStore';
 import { usePosStore } from '@/stores/posStore';
@@ -48,6 +49,7 @@ export default function POSPage() {
   const [pending, setPending] = React.useState(false);
   const [lookup, setLookup] = React.useState(false);
   const [trxList, setTrxList] = React.useState(false);
+  const [receipt, setReceipt] = React.useState(null); // { trx } or null
   const scanRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -72,7 +74,7 @@ export default function POSPage() {
   }, [setOnline]);
 
   const anyModalOpen =
-    openShift || closeShift || payment || returnMod || petty || search || pending || lookup || trxList;
+    openShift || closeShift || payment || returnMod || petty || search || pending || lookup || trxList || !!receipt;
 
   const doSync = async () => {
     const r = await sync();
@@ -244,7 +246,8 @@ export default function POSPage() {
           navigate('/login');
         }}
       />
-      <PaymentModal open={payment} onOpenChange={setPayment} onPaid={() => {}} />
+      <PaymentModal open={payment} onOpenChange={setPayment} onPaid={(trx) => setReceipt({ ...trx, cashierName: user?.name })} />
+      <ReceiptModal open={!!receipt} onOpenChange={(v) => !v && setReceipt(null)} trx={receipt} />
       <ReturnModal open={returnMod} onOpenChange={setReturnMod} />
       <PettyCashModal open={petty} onOpenChange={setPetty} />
       <ProductSearchModal open={search} onOpenChange={setSearch} />
