@@ -1,0 +1,51 @@
+{
+  "summary": "Loyalty Points + Birthday Promo feature fully verified end-to-end (frontend only). 13/13 scenarios from spec PASS. Main happy path (M-0001 SILVER birthday): subtotal 117.000 -> auto-applied 10% birthday discount -> bigTotal 105.300, MemberRibbon shows all required testids (SILVER tier, 245 = Rp 245.000, +10 pt, pink birthday banner, toggle auto-CHECKED). PaymentModal amber loyalty card + pink birthday toggle behave exactly per spec. MAX button correctly caps to Math.ceil(105300/1000)=106 (NOT the full 245 balance). Toggling birthday off recalculates to 11.000 (=117000-106000) with loyalty preserved at 106. NOL resets redemption to 0. Confirm with 200.000 cash produces receipt with 'Promo Ultah -11.700', 'TOTAL 105.300', 'Poin Didapat +10 pt'. IndexedDB after finalize: customer M-0001 points=255 (245-0+10), lifetimeSpend=1.355.300 (1.250.000+105.300), lastVisitAt updated. transactions latest row carries birthdayDiscount=11700, loyaltyRedeem=0, loyaltyRedeemPoints=0, loyaltyEarnedPoints=10, grandTotal=105300, customer.memberNumber=M-0001. Edge cases: M-0004 -> BRONZE + birth-month selector (no banner, no discount, bigTotal stays 3.500). M-0003 -> GOLD tier (no birthday banner since not in birth month). Regression: no-customer flow works — no MemberRibbon, no loyalty/birthday cards in PaymentModal, receipt has no 'Poin Didapat' line, transaction TRX-20260622-0002 completes successfully.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "MemberRibbon — points-balance testid",
+        "issues": ["Minor: the member-points-balance element's textContent is '245 = Rp 245.000' (Saldo Poin label is sibling, not inside this testid). If a future test asserts an exact format like '245 pt' it should adapt. Not a bug — just a note on the DOM shape."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_6.json (previous iteration)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "VERIFIED: hooks/useTotals.js is single source of truth — Header (pos-big-total), TransactionGrid totals, and PaymentModal all reflect identical computed values (117.000 -> 105.300 -> 0 -> 11.000 -> 105.300) without drift through the entire flow.",
+    "VERIFIED: birthday math uses Math.round(lineTotal * 0.1) producing exact 11.700 for 117.000 — no rounding ambiguity (confirmed in DB latestTrx.birthdayDiscount=11700).",
+    "VERIFIED: MAX redemption cap math is correct — Math.min(customer.points=245, Math.ceil((117000-11700)/1000)=106) = 106. Points are NOT wasted to zero out beyond what's needed.",
+    "VERIFIED: posStore.finalize() correctly invokes api.applyLoyalty when customer.id is present; customer.points updated (+earned -redeemed), lifetimeSpend incremented by grandTotal (not subtotal), lastVisitAt set to ISO timestamp.",
+    "VERIFIED: setCustomer auto-toggles birthdayDiscount only when isBirthdayMonth(customer.birthMonth) is true (M-0001 yes, M-0003/M-0004 no).",
+    "VERIFIED: Tier mapping per spec — M-0001 lifetimeSpend=1.250.000 -> SILVER, M-0003 lifetimeSpend=5.840.000 -> GOLD, M-0004 -> BRONZE.",
+    "VERIFIED: receipt (escpos.js) prints 'Promo Ultah -11.700' and 'Poin Didapat +10 pt' for member trx; omits both lines on non-member trx (regression receipt for TRX-...-0002 has neither).",
+    "VERIFIED: F-keys still work post-feature: F11 opens customer lookup, F5 opens payment, F9 cancels (after enrol-modal). Regression untouched.",
+    "(LOW) Carry-over from iter 6: Radix DialogContent missing aria-describedby on several modals — cosmetic console warning only."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "13/13 scenarios = 100%"},
+  "test_credentials": "cashier / 1234 (works)",
+  "seed_data_creation": "IndexedDB cleared at start of run; seedIfEmpty repopulated M-0001..M-0004 with new fields (points, lifetimeSpend, birthMonth). M-0001 birthMonth=current (verified via auto-checked toggle). M-0003 lifetimeSpend=5.84M (verified GOLD badge).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Loyalty + Birthday feature is stable and complete. Key testids in use: member-ribbon, member-tier, member-points-balance, member-points-to-earn, member-birthday-banner, member-birthday-toggle, member-birth-month-edit, payment-loyalty-input, payment-loyalty-max, payment-birthday-toggle. IndexedDB name is 'retail_pos_db' (NOT 'pos_db'). When clearing for fresh-start tests, delete both names. Login flow: data-testid login-username-input/login-pin-input/login-submit-btn. Shift open: shift-opening-cash-input / shift-open-btn. POS scan: pos-scan-input. Big header total: pos-big-total. F11 customer lookup modal opens a Radix dialog whose ONLY input is the member-number/phone field — no data-testid on the input itself (use '[role=dialog] input').",
+  "scenario_results": {
+    "S1_login_shift_scan_117k": "PASS (bigTotal=117.000)",
+    "S2_F11_M0001_ribbon_silver_245pts_10earn_birthdaybanner_toggle_checked": "PASS",
+    "S3_bigTotal_drops_to_105300_on_attach": "PASS (auto-applied 11.700 birthday discount)",
+    "S4_F5_loyalty_card_birthday_toggle_grand_105300": "PASS (loyValue=0, MAX present, bday=True/checked)",
+    "S5_MAX_caps_to_106_not_245": "PASS (loyaltyInput=106, GrandTotal=0, 'BAYAR PAS — 0')",
+    "S6_uncheck_birthday_loy_preserved_106_grand_11000": "PASS (exact 11.000)",
+    "S7_recheck_birthday_NOL_resets_to_105300": "PASS",
+    "S8_pay_200000_cash_confirm_receipt": "PASS (TRX-20260622-0001, receipt shows Promo Ultah -11.700, TOTAL 105.300, Poin Didapat +10 pt)",
+    "S9_indexeddb_persist_points_255_lifetime_1355300": "PASS (points 245->255, lifetimeSpend 1.250.000->1.355.300, trx fields populated)",
+    "S10_edge_M0004_bronze_no_banner_month_selector": "PASS (BRONZE + birth-month-edit, no 10% applied, bigTotal stays 3.500)",
+    "S11_edge_M0003_gold": "PASS (GOLD badge, no birthday banner since not birth month)",
+    "S12_regression_no_customer_flow": "PASS (no MemberRibbon, no loyalty card in PaymentModal, TRX-20260622-0002 completes, no 'Poin Didapat' line on receipt)",
+    "S13_fkeys_still_work": "PASS (F11 + F5 + F9 functional)"
+  }
+}

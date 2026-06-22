@@ -44,10 +44,10 @@ const seedProducts = [
 ];
 
 const seedCustomers = [
-  { memberNumber: 'M-0001', name: 'BUDI SANTOSO', phone: '081234567890', address: 'JL. MERDEKA NO. 12, JAKARTA' },
-  { memberNumber: 'M-0002', name: 'SITI AMINAH', phone: '082198765432', address: 'JL. SUDIRMAN NO. 45, BANDUNG' },
-  { memberNumber: 'M-0003', name: 'AGUS WIJAYA', phone: '081345678912', address: 'JL. PAHLAWAN NO. 7, SURABAYA' },
-  { memberNumber: 'M-0004', name: 'DEWI LESTARI', phone: '081567894321', address: 'JL. DIPONEGORO 23, YOGYAKARTA' },
+  { memberNumber: 'M-0001', name: 'BUDI SANTOSO', phone: '081234567890', address: 'JL. MERDEKA NO. 12, JAKARTA', points: 245, lifetimeSpend: 1_250_000, birthMonth: new Date().getMonth() + 1 },
+  { memberNumber: 'M-0002', name: 'SITI AMINAH', phone: '082198765432', address: 'JL. SUDIRMAN NO. 45, BANDUNG', points: 88, lifetimeSpend: 320_000, birthMonth: ((new Date().getMonth() + 2) % 12) + 1 },
+  { memberNumber: 'M-0003', name: 'AGUS WIJAYA', phone: '081345678912', address: 'JL. PAHLAWAN NO. 7, SURABAYA', points: 612, lifetimeSpend: 5_840_000, birthMonth: 3 },
+  { memberNumber: 'M-0004', name: 'DEWI LESTARI', phone: '081567894321', address: 'JL. DIPONEGORO 23, YOGYAKARTA', points: 12, lifetimeSpend: 75_000, birthMonth: 8 },
 ];
 
 const seedUsers = [

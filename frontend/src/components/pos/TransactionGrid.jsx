@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePosStore } from '@/stores/posStore';
+import { useTotals } from '@/hooks/useTotals';
 import { formatIDR, formatQty } from '@/lib/format';
 import { POS } from '@/constants/testIds';
 
@@ -21,12 +22,7 @@ export default function TransactionGrid() {
   const setSelectedIndex = usePosStore((s) => s.setSelectedIndex);
   const removeItem = usePosStore((s) => s.removeItem);
   const updateItem = usePosStore((s) => s.updateItem);
-  const totals = React.useMemo(() => {
-    const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-    const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unitPrice) || 0), 0);
-    const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
-    return { totalQty, subtotal, discount: subtotal - lineTotal, grandTotal: lineTotal };
-  }, [items]);
+  const totals = useTotals();
   const scrollRef = React.useRef(null);
 
   React.useEffect(() => {

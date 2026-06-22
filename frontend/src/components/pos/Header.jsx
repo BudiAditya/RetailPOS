@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useShiftStore } from '@/stores/shiftStore';
 import { usePosStore } from '@/stores/posStore';
+import { useTotals } from '@/hooks/useTotals';
 import { formatIDR, formatTime } from '@/lib/format';
 import { POS } from '@/constants/testIds';
 
@@ -9,13 +10,7 @@ export default function Header() {
   const user = useAuthStore((s) => s.user);
   const shift = useShiftStore((s) => s.shift);
   const trxNumber = usePosStore((s) => s.trxNumber);
-  const items = usePosStore((s) => s.items);
-  const totals = React.useMemo(() => {
-    const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-    const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unitPrice) || 0), 0);
-    const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
-    return { totalQty, subtotal, discount: subtotal - lineTotal, grandTotal: lineTotal };
-  }, [items]);
+  const totals = useTotals();
   const mode = usePosStore((s) => s.mode);
   const [now, setNow] = React.useState(new Date());
 

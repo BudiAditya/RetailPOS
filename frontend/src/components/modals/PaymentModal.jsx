@@ -3,8 +3,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { usePosStore } from '@/stores/posStore';
 import { useShiftStore } from '@/stores/shiftStore';
 import { useAuthStore } from '@/stores/authStore';
+import { useTotals } from '@/hooks/useTotals';
 import { PAY } from '@/constants/testIds';
-import { formatIDR } from '@/lib/format';
+import { formatIDR, RUPIAH_PER_POINT, BIRTHDAY_DISCOUNT_PCT, isBirthdayMonth } from '@/lib/format';
+import { Cake, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 
 const METHODS = [
@@ -21,12 +23,12 @@ const QUICK = [50000, 100000, 200000, 500000];
 export default function PaymentModal({ open, onOpenChange, onPaid }) {
   const finalize = usePosStore((s) => s.finalize);
   const items = usePosStore((s) => s.items);
-  const totals = React.useMemo(() => {
-    const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
-    const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unitPrice) || 0), 0);
-    const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
-    return { totalQty, subtotal, discount: subtotal - lineTotal, grandTotal: lineTotal };
-  }, [items]);
+  const customer = usePosStore((s) => s.customer);
+  const birthdayDiscount = usePosStore((s) => s.birthdayDiscount);
+  const setBirthdayDiscount = usePosStore((s) => s.setBirthdayDiscount);
+  const loyaltyRedeem = usePosStore((s) => s.loyaltyRedeem);
+  const setLoyaltyRedeem = usePosStore((s) => s.setLoyaltyRedeem);
+  const totals = useTotals();
   const shift = useShiftStore((s) => s.shift);
   const user = useAuthStore((s) => s.user);
 
@@ -97,6 +99,78 @@ export default function PaymentModal({ open, onOpenChange, onPaid }) {
 
           {/* Right: amounts */}
           <div className="col-span-8 p-4 space-y-3 bg-white">
+            {/* Loyalty + Birthday */}
+            {customer?.id && (
+              <div className="border-2 border-amber-300 bg-amber-50 p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="font-pos-sans text-[10px] uppercase tracking-widest text-amber-800 flex items-center gap-1">
+                    <Coins className="h-3 w-3" /> Loyalti — {customer.memberNumber}
+                  </div>
+                  <div className="font-pos-mono text-[11px] text-amber-800">
+                    Saldo: <span className="font-bold tabular-nums">{Number(customer.points || 0).toLocaleString('id-ID')} pt</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="font-pos-mono text-[11px] text-slate-700 whitespace-nowrap">Tukar Poin:</label>
+                  <input
+                    data-testid="payment-loyalty-input"
+                    type="number"
+                    min="0"
+                    max={Number(customer.points || 0)}
+                    value={loyaltyRedeem}
+                    onChange={(e) => setLoyaltyRedeem(Number(e.target.value) || 0)}
+                    className="w-24 h-8 px-2 bg-white border border-amber-400 font-pos-mono text-sm text-right tabular-nums focus:outline-none focus:border-amber-600"
+                  />
+                  <span className="font-pos-mono text-[11px] text-slate-700">pt</span>
+                  <button
+                    type="button"
+                    data-testid="payment-loyalty-max"
+                    onClick={() => {
+                      // Cap to whichever is smaller: customer's balance OR enough points to zero-out the bill
+                      const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
+                      const birthdayAmt = birthdayDiscount ? Math.round(lineTotal * 0.1) : 0;
+                      const remaining = Math.max(0, lineTotal - birthdayAmt);
+                      const needed = Math.ceil(remaining / RUPIAH_PER_POINT);
+                      setLoyaltyRedeem(Math.min(Number(customer.points || 0), needed));
+                    }}
+                    className="h-8 px-2 bg-amber-500 hover:bg-amber-600 text-slate-900 border border-amber-700 font-pos-sans text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    MAX
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLoyaltyRedeem(0)}
+                    className="h-8 px-2 bg-slate-200 hover:bg-slate-300 text-slate-900 border border-slate-400 font-pos-sans text-[10px] font-bold uppercase tracking-widest"
+                  >
+                    NOL
+                  </button>
+                  <div className="flex-1 text-right font-pos-mono text-sm font-bold text-amber-900 tabular-nums">
+                    - {formatIDR(totals.loyaltyRedeem)}
+                  </div>
+                </div>
+                {isBirthdayMonth(customer.birthMonth) && (
+                  <div className="flex items-center justify-between bg-pink-100 border border-pink-300 px-2 py-1">
+                    <label className="flex items-center gap-1 cursor-pointer select-none">
+                      <input
+                        data-testid="payment-birthday-toggle"
+                        type="checkbox"
+                        checked={birthdayDiscount}
+                        onChange={(e) => setBirthdayDiscount(e.target.checked)}
+                        className="w-4 h-4 accent-pink-600"
+                      />
+                      <Cake className="h-4 w-4 text-pink-700" />
+                      <span className="font-pos-sans text-[11px] font-bold uppercase tracking-widest text-pink-800">
+                        Promo Ulang Tahun {BIRTHDAY_DISCOUNT_PCT}%
+                      </span>
+                    </label>
+                    <span className="font-pos-mono text-sm font-bold text-pink-800 tabular-nums">
+                      - {formatIDR(totals.birthdayDiscount)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <BigRow label="Grand Total" value={formatIDR(totals.grandTotal)} tone="primary" />
 
             {method === 'CASH' && (

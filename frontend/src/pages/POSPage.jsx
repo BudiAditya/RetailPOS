@@ -4,6 +4,7 @@ import Header from '@/components/pos/Header';
 import ScanInput from '@/components/pos/ScanInput';
 import TransactionGrid from '@/components/pos/TransactionGrid';
 import CustomerPanel from '@/components/pos/CustomerPanel';
+import MemberRibbon from '@/components/pos/MemberRibbon';
 import ActionButtons from '@/components/pos/ActionButtons';
 import StatusBar from '@/components/pos/StatusBar';
 import OpenShiftModal from '@/components/modals/OpenShiftModal';
@@ -210,6 +211,14 @@ export default function POSPage() {
         <TransactionGrid />
       </div>
       <CustomerPanel onLookup={() => setLookup(true)} />
+      <MemberRibbon
+        onUpdateCustomer={async (next) => {
+          if (!next?.id) return;
+          const { db: dxdb } = await import('@/db/database');
+          await dxdb.customers.put(next);
+          usePosStore.getState().setCustomer(next);
+        }}
+      />
 
       {/* Mode toggle pill (SALE/RETURN) */}
       <div className="px-3 py-1 bg-slate-200 border-t border-slate-300 flex items-center gap-2">

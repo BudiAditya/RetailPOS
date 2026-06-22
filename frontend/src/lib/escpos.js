@@ -75,12 +75,19 @@ export function renderReceiptText(trx, store) {
   out.push(line('-'));
   out.push(twoCol('Subtotal', fmtIDR(trx.subtotal)));
   if ((trx.discount || 0) > 0) out.push(twoCol('Diskon', `-${fmtIDR(trx.discount)}`));
+  if ((trx.birthdayDiscount || 0) > 0) out.push(twoCol('Promo Ultah', `-${fmtIDR(trx.birthdayDiscount)}`));
+  if ((trx.loyaltyRedeem || 0) > 0)
+    out.push(twoCol(`Tukar ${trx.loyaltyRedeemPoints || 0} pt`, `-${fmtIDR(trx.loyaltyRedeem)}`));
   out.push(twoCol('TOTAL', fmtIDR(trx.grandTotal)));
   out.push(line('-'));
   for (const p of trx.payments || []) {
     out.push(twoCol(`Bayar (${p.method})`, fmtIDR(p.amount)));
   }
   out.push(twoCol('Kembalian', fmtIDR(trx.change || 0)));
+  if ((trx.loyaltyEarnedPoints || 0) > 0) {
+    out.push(line('-'));
+    out.push(twoCol('Poin Didapat', `+${trx.loyaltyEarnedPoints} pt`));
+  }
   out.push(line('='));
   out.push(centerText('TERIMA KASIH'));
   out.push(centerText('Selamat Belanja Kembali'));
@@ -123,6 +130,10 @@ export function renderReceiptEscPos(trx, store) {
   parts.push(escpos.text(line('-')), escpos.lf());
   parts.push(escpos.text(twoCol('Subtotal', fmtIDR(trx.subtotal))), escpos.lf());
   if ((trx.discount || 0) > 0) parts.push(escpos.text(twoCol('Diskon', `-${fmtIDR(trx.discount)}`)), escpos.lf());
+  if ((trx.birthdayDiscount || 0) > 0)
+    parts.push(escpos.text(twoCol('Promo Ultah', `-${fmtIDR(trx.birthdayDiscount)}`)), escpos.lf());
+  if ((trx.loyaltyRedeem || 0) > 0)
+    parts.push(escpos.text(twoCol(`Tukar ${trx.loyaltyRedeemPoints || 0} pt`, `-${fmtIDR(trx.loyaltyRedeem)}`)), escpos.lf());
   parts.push(escpos.bold(true));
   parts.push(escpos.text(twoCol('TOTAL', fmtIDR(trx.grandTotal))), escpos.lf());
   parts.push(escpos.bold(false));
@@ -131,6 +142,10 @@ export function renderReceiptEscPos(trx, store) {
     parts.push(escpos.text(twoCol(`Bayar (${p.method})`, fmtIDR(p.amount))), escpos.lf());
   }
   parts.push(escpos.text(twoCol('Kembalian', fmtIDR(trx.change || 0))), escpos.lf());
+  if ((trx.loyaltyEarnedPoints || 0) > 0) {
+    parts.push(escpos.text(line('-')), escpos.lf());
+    parts.push(escpos.text(twoCol('Poin Didapat', `+${trx.loyaltyEarnedPoints} pt`)), escpos.lf());
+  }
   parts.push(escpos.text(line('=')), escpos.lf());
   parts.push(escpos.alignCenter());
   parts.push(escpos.text('TERIMA KASIH'), escpos.lf());

@@ -22,7 +22,17 @@ export default function CustomerLookupModal({ open, onOpenChange }) {
       toast.error('Member tidak ditemukan.');
       return;
     }
-    setCustomer({ id: c.id, memberNumber: c.memberNumber, name: c.name, phone: c.phone, address: c.address });
+    setCustomer({
+      id: c.id,
+      memberNumber: c.memberNumber,
+      name: c.name,
+      phone: c.phone,
+      address: c.address,
+      email: c.email,
+      points: c.points,
+      lifetimeSpend: c.lifetimeSpend,
+      birthMonth: c.birthMonth,
+    });
     toast.success(`Member ${c.name} terhubung.`);
     onOpenChange(false);
   };

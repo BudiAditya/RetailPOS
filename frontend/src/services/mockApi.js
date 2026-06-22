@@ -142,6 +142,28 @@ export const api = {
     await db.sync_queue.add({ entity: 'transactions', op: 'update', refId: trxId, createdAt: nowISO() });
   },
 
+  // Apply loyalty: deduct redeemed points, accrue new points based on earned subtotal,
+  // accumulate lifetime spend. Returns updated customer.
+  async applyLoyalty({ customerId, redeemed = 0, earned = 0, spend = 0 }) {
+    if (!customerId) return null;
+    const c = await db.customers.get(customerId);
+    if (!c) return null;
+    const next = {
+      ...c,
+      points: Math.max(0, Number(c.points || 0) - Number(redeemed || 0) + Number(earned || 0)),
+      lifetimeSpend: Number(c.lifetimeSpend || 0) + Number(spend || 0),
+      lastVisitAt: nowISO(),
+    };
+    await db.customers.put(next);
+    await db.sync_queue.add({ entity: 'customers', op: 'update', refId: customerId, createdAt: nowISO() });
+    return next;
+  },
+
+  async getCustomerById(id) {
+    if (!id) return null;
+    return db.customers.get(id);
+  },
+
   async shiftSummary(shiftId) {
     const trx = await db.transactions.where('shiftId').equals(shiftId).toArray();
     const petty = await db.petty_cash.where('shiftId').equals(shiftId).toArray();

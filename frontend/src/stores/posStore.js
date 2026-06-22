@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { db } from '../db/database';
-import { uid, nowISO } from '../lib/format';
+import { uid, nowISO, BIRTHDAY_DISCOUNT_PCT, RUPIAH_PER_POINT, pointsEarned, isBirthdayMonth } from '../lib/format';
+import { api } from '../services/mockApi';
 
 const calcLine = (it) => {
   const sign = (Number(it.qty) || 0) < 0 ? -1 : 1;
@@ -27,16 +28,28 @@ export const usePosStore = create((set, get) => ({
   items: [],
   qty: 1,
   selectedIndex: -1,
-  customer: null, // {id, memberNumber, name, phone, address}
+  customer: null, // {id, memberNumber, name, phone, address, points, lifetimeSpend, birthMonth}
   deliveryMethod: 'TAKE AWAY',
   pendingList: [],
   mode: 'SALE', // SALE | RETURN
+  loyaltyRedeem: 0, // points redeemed in current transaction
+  birthdayDiscount: false, // auto-enabled when customer.birthMonth matches today
 
   setQty: (q) => set({ qty: Math.max(1, Number(q) || 1) }),
   setSelectedIndex: (i) => set({ selectedIndex: i }),
   setDelivery: (m) => set({ deliveryMethod: m }),
-  setCustomer: (c) => set({ customer: c }),
+  setCustomer: (c) => set({
+    customer: c,
+    birthdayDiscount: !!(c && isBirthdayMonth(c.birthMonth)),
+    loyaltyRedeem: 0,
+  }),
   setMode: (m) => set({ mode: m }),
+  setLoyaltyRedeem: (p) => {
+    const c = get().customer;
+    const max = Math.max(0, Number(c?.points || 0));
+    set({ loyaltyRedeem: Math.max(0, Math.min(max, Number(p) || 0)) });
+  },
+  setBirthdayDiscount: (v) => set({ birthdayDiscount: !!v }),
 
   addByBarcode: async (barcode) => {
     if (!barcode) return { ok: false, error: 'Barcode kosong' };
@@ -103,7 +116,7 @@ export const usePosStore = create((set, get) => ({
     set({ items: next, selectedIndex: Math.min(get().selectedIndex, next.length - 1) });
   },
 
-  cancelTransaction: () => set({ items: [], qty: 1, selectedIndex: -1, customer: null, deliveryMethod: 'TAKE AWAY', mode: 'SALE', trxNumber: newTrxNumber() }),
+  cancelTransaction: () => set({ items: [], qty: 1, selectedIndex: -1, customer: null, deliveryMethod: 'TAKE AWAY', mode: 'SALE', trxNumber: newTrxNumber(), loyaltyRedeem: 0, birthdayDiscount: false }),
 
   totals: () => {
     const items = get().items;
@@ -156,10 +169,20 @@ export const usePosStore = create((set, get) => ({
   },
 
   finalize: async ({ payments, shiftId, cashierId }) => {
-    const { items, customer, deliveryMethod, trxNumber, mode } = get();
-    const t = get().totals();
-    const paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
-    const change = Math.max(0, paid - t.grandTotal);
+    const { items, customer, deliveryMethod, trxNumber, mode, loyaltyRedeem, birthdayDiscount } = get();
+    // Item-level totals
+    const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+    const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unitPrice) || 0), 0);
+    const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
+    const itemDiscount = subtotal - lineTotal;
+    // Birthday discount
+    const birthdayAmt = birthdayDiscount ? Math.round(lineTotal * (BIRTHDAY_DISCOUNT_PCT / 100)) : 0;
+    // Loyalty redemption
+    const redeemPoints = Math.max(0, Math.min(Number(loyaltyRedeem) || 0, Number(customer?.points || 0)));
+    const redeemAmt = redeemPoints * RUPIAH_PER_POINT;
+    const grandTotal = Math.max(0, lineTotal - birthdayAmt - redeemAmt);
+    const earnedPoints = customer?.id ? pointsEarned(grandTotal) : 0;
+
     const trx = {
       id: uid(),
       trxNumber,
@@ -169,9 +192,16 @@ export const usePosStore = create((set, get) => ({
       customer,
       deliveryMethod,
       payments,
-      paid,
-      change,
-      ...t,
+      paid: payments.reduce((s, p) => s + (Number(p.amount) || 0), 0),
+      change: Math.max(0, payments.reduce((s, p) => s + (Number(p.amount) || 0), 0) - grandTotal),
+      totalQty,
+      subtotal,
+      discount: itemDiscount,
+      birthdayDiscount: birthdayAmt,
+      loyaltyRedeem: redeemAmt,
+      loyaltyRedeemPoints: redeemPoints,
+      loyaltyEarnedPoints: earnedPoints,
+      grandTotal,
       status: 'COMPLETED',
       createdAt: nowISO(),
     };
@@ -179,7 +209,15 @@ export const usePosStore = create((set, get) => ({
     await db.transactions.add(trx);
     await db.transaction_items.bulkAdd(itemRows);
     await db.sync_queue.add({ entity: 'transactions', op: 'create', refId: trx.id, createdAt: nowISO() });
-    set({ items: [], customer: null, deliveryMethod: 'TAKE AWAY', selectedIndex: -1, mode: 'SALE', trxNumber: newTrxNumber() });
+    if (customer?.id) {
+      await api.applyLoyalty({
+        customerId: customer.id,
+        redeemed: redeemPoints,
+        earned: earnedPoints,
+        spend: grandTotal,
+      });
+    }
+    set({ items: [], customer: null, deliveryMethod: 'TAKE AWAY', selectedIndex: -1, mode: 'SALE', trxNumber: newTrxNumber(), loyaltyRedeem: 0, birthdayDiscount: false });
     return { ...trx, items: itemRows };
   },
 }));
