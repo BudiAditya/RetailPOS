@@ -37,7 +37,57 @@ export const api = {
     const byMember = await db.customers.where('memberNumber').equals(q).first();
     if (byMember) return byMember;
     const byPhone = await db.customers.where('phone').equals(q).first();
-    return byPhone || null;
+    if (byPhone) return byPhone;
+    const byEmail = await db.customers.filter((c) => (c.email || '').toLowerCase() === q.toLowerCase()).first();
+    return byEmail || null;
+  },
+
+  async nextMemberNumber() {
+    const all = await db.customers.toArray();
+    const nums = all
+      .map((c) => parseInt((c.memberNumber || '').replace(/[^0-9]/g, ''), 10))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    const next = (nums.length ? Math.max(...nums) : 0) + 1;
+    return `M-${String(next).padStart(4, '0')}`;
+  },
+
+  // Upsert a member from contact info captured at checkout.
+  // Returns { customer, created: boolean }
+  async upsertMemberFromContact({ phone, email, name, address }) {
+    const phoneNorm = (phone || '').replace(/[^\d]/g, '');
+    const emailNorm = (email || '').trim().toLowerCase();
+    let existing = null;
+    if (phoneNorm) {
+      existing = await db.customers.filter((c) => (c.phone || '').replace(/[^\d]/g, '') === phoneNorm).first();
+    }
+    if (!existing && emailNorm) {
+      existing = await db.customers.filter((c) => (c.email || '').toLowerCase() === emailNorm).first();
+    }
+    if (existing) {
+      const patch = {};
+      if (name && !existing.name) patch.name = name;
+      if (email && !existing.email) patch.email = email;
+      if (phone && !existing.phone) patch.phone = phone;
+      if (address && !existing.address) patch.address = address;
+      if (Object.keys(patch).length > 0) {
+        await db.customers.update(existing.id, patch);
+        return { customer: { ...existing, ...patch }, created: false, updated: true };
+      }
+      return { customer: existing, created: false, updated: false };
+    }
+    const memberNumber = await api.nextMemberNumber();
+    const rec = {
+      id: uid(),
+      memberNumber,
+      name: name || (phone ? `PELANGGAN ${phoneNorm.slice(-4)}` : (email || 'PELANGGAN BARU')),
+      phone: phone || '',
+      email: email || '',
+      address: address || '',
+      createdAt: nowISO(),
+    };
+    await db.customers.add(rec);
+    await db.sync_queue.add({ entity: 'customers', op: 'create', refId: rec.id, createdAt: nowISO() });
+    return { customer: rec, created: true, updated: false };
   },
 
   async addPettyCash({ shiftId, type, amount, reason, reference }) {
@@ -78,6 +128,11 @@ export const api = {
     await db.returns.add(rec);
     await db.sync_queue.add({ entity: 'returns', op: 'create', refId: rec.id, createdAt: nowISO() });
     return rec;
+  },
+
+  async updateTransactionCustomer(trxId, customer) {
+    await db.transactions.update(trxId, { customer });
+    await db.sync_queue.add({ entity: 'transactions', op: 'update', refId: trxId, createdAt: nowISO() });
   },
 
   async shiftSummary(shiftId) {

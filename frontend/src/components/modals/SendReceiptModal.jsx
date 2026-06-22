@@ -2,7 +2,8 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import QRCode from 'qrcode';
 import { renderReceiptText, DEFAULT_STORE } from '@/lib/escpos';
-import { MessageCircle, Mail, ExternalLink, QrCode, Send } from 'lucide-react';
+import { api } from '@/services/mockApi';
+import { MessageCircle, Mail, ExternalLink, QrCode, Send, UserPlus, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const SEND_TESTIDS = {
@@ -15,6 +16,8 @@ export const SEND_TESTIDS = {
   apiBtn: 'send-api-btn',
   apiStatus: 'send-api-status',
   qrCanvas: 'send-qr-canvas',
+  enrolToggle: 'send-enrol-toggle',
+  memberStatus: 'send-member-status',
 };
 
 const API = process.env.REACT_APP_BACKEND_URL;
@@ -24,6 +27,8 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
   const [to, setTo] = React.useState('');
   const [busy, setBusy] = React.useState(false);
   const [integrations, setIntegrations] = React.useState(null);
+  const [enrol, setEnrol] = React.useState(true);
+  const [memberMatch, setMemberMatch] = React.useState(null); // {customer, exists} | null
   const canvasRef = React.useRef(null);
 
   const text = React.useMemo(() => (trx ? renderReceiptText(trx, store) : ''), [trx, store]);
@@ -46,6 +51,23 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
       .catch(() => setIntegrations(null));
   }, [open]);
 
+  // Live member lookup as the cashier types
+  React.useEffect(() => {
+    if (!open || !to.trim()) {
+      setMemberMatch(null);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const c = await api.lookupCustomer(to.trim());
+      if (!cancelled) setMemberMatch(c ? { customer: c, exists: true } : { customer: null, exists: false });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [open, to, channel]);
+
   // QR — encodes a compact receipt summary. Long bodies make QR unreadable so we cap.
   React.useEffect(() => {
     if (!open || !canvasRef.current || !trx) return;
@@ -53,9 +75,24 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
     QRCode.toCanvas(canvasRef.current, payload, { width: 192, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } });
   }, [open, trx, store]);
 
-  if (!trx) return null;
-
   const normalizedPhone = to.replace(/[^\d+]/g, '').replace(/^0/, '62');
+
+  // Auto-enrol: if checkbox ON, ensure a customer record exists for this contact
+  // and attach it to the current transaction. Idempotent.
+  const ensureMember = React.useCallback(async () => {
+    if (!enrol || !to.trim() || !trx) return null;
+    const contact = channel === 'whatsapp'
+      ? { phone: `+${normalizedPhone}`, name: trx?.customer?.name }
+      : { email: to.trim(), name: trx?.customer?.name };
+    const res = await api.upsertMemberFromContact(contact);
+    if (trx?.id) await api.updateTransactionCustomer(trx.id, res.customer);
+    if (res.created) toast.success(`Member baru: ${res.customer.memberNumber} — ${res.customer.name}`);
+    else if (res.updated) toast.info(`Member ${res.customer.memberNumber} diperbarui.`);
+    setMemberMatch({ customer: res.customer, exists: true });
+    return res.customer;
+  }, [enrol, to, trx, channel, normalizedPhone]);
+
+  if (!trx) return null;
 
   const waUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(text)}`;
   const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
@@ -64,6 +101,7 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
     if (!to.trim()) return toast.error(channel === 'whatsapp' ? 'Masukkan nomor WhatsApp.' : 'Masukkan alamat email.');
     setBusy(true);
     try {
+      await ensureMember();
       const res = await fetch(`${API}/api/receipt/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -150,6 +188,44 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
               )}
             </div>
 
+            {/* Member auto-enrol status & toggle */}
+            <div
+              data-testid={SEND_TESTIDS.memberStatus}
+              className={`border-2 px-2 py-1.5 font-pos-mono text-xs ${
+                !to.trim()
+                  ? 'bg-slate-50 border-slate-300 text-slate-500'
+                  : memberMatch?.exists
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                    : 'bg-amber-50 border-amber-400 text-amber-800'
+              }`}
+            >
+              {!to.trim() ? (
+                <span>— Masukkan {channel === 'whatsapp' ? 'nomor' : 'email'} untuk auto-enrol membership —</span>
+              ) : memberMatch?.exists ? (
+                <span className="flex items-center gap-1">
+                  <UserCheck className="h-3 w-3" /> Member <b>{memberMatch.customer.memberNumber}</b> — {memberMatch.customer.name}
+                </span>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <UserPlus className="h-3 w-3" /> Belum terdaftar.{' '}
+                  {enrol ? <span>Akan otomatis didaftarkan saat dikirim.</span> : <span className="opacity-70">Auto-enrol dimatikan.</span>}
+                </span>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                data-testid={SEND_TESTIDS.enrolToggle}
+                type="checkbox"
+                checked={enrol}
+                onChange={(e) => setEnrol(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600"
+              />
+              <span className="font-pos-sans text-[11px] uppercase tracking-widest text-slate-700">
+                Daftarkan sebagai Member otomatis
+              </span>
+            </label>
+
             {/* API status pill */}
             <div
               data-testid={SEND_TESTIDS.apiStatus}
@@ -161,7 +237,7 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
             >
               {apiReady ? (
                 <span>
-                  ✓ API aktif untuk channel <b>{channel}</b>. Klik tombol "Kirim via API" untuk auto-send.
+                  ✓ API aktif untuk channel <b>{channel}</b>. Klik tombol &quot;Kirim via API&quot; untuk auto-send.
                 </span>
               ) : (
                 <span>
@@ -181,7 +257,9 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
                     if (!to.trim()) {
                       e.preventDefault();
                       toast.error('Masukkan nomor WhatsApp.');
+                      return;
                     }
+                    ensureMember();
                   }}
                   target="_blank"
                   rel="noreferrer"
@@ -203,7 +281,9 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
                     if (!to.trim()) {
                       e.preventDefault();
                       toast.error('Masukkan alamat email.');
+                      return;
                     }
+                    ensureMember();
                   }}
                   className="w-full h-11 px-3 inline-flex items-center gap-2 border-2 bg-blue-700 hover:bg-blue-800 text-white border-blue-900 font-pos-sans font-bold uppercase tracking-widest text-xs"
                 >
