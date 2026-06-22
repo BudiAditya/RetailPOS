@@ -1,0 +1,41 @@
+{
+  "summary": "Frontend-only POS smoke testing via Playwright. Login (valid+invalid), Open Shift, header info, scan flow with 4 barcodes, unknown barcode toast, stacking, F1 qty focus, F4 product search, F5 payment (cash with change + finalize + reset + new trx#), Save Pending + F7 resume, Alt+P petty cash, F12 sync, F2 logout all WORK. CRITICAL bug: Alt+R Return modal crashes the entire React tree (white screen) because completed transactions persisted via posStore.finalize do NOT contain an `items` array — items are stored in a separate Dexie table `transaction_items`, but ReturnModal reads `t.items.length` / `t.items.map(...)`. After the crash all subsequent UI is unreachable (Alt+C, status bar, F2 navigation, F12 toast).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ReturnModal (Alt+R)", "issue": "Crashes with 'Cannot read properties of undefined (reading length)' the moment the modal opens — selected.items (and t.items in the transaction list) are undefined. Causes a full white-screen React error and kills the POS until reload.", "selector": "[role=dialog] inside ReturnModal", "priority": "CRITICAL"},
+      {"component": "CloseShiftModal (Alt+C)", "issue": "Could not be tested in this run because the preceding ReturnModal crash blanks the app. Needs retest after Return fix.", "selector": "[data-testid=shift-expected-cash]", "priority": "HIGH (blocked)"},
+      {"component": "StatusBar / F12 sync / F2 logout", "issue": "Same blockage — could not be verified because Return crash unmounts the tree. Independently they need a clean retest.", "selector": "[data-testid=pos-status-bar]", "priority": "HIGH (blocked)"},
+      {"component": "All Dialog modals", "issue": "Radix a11y warning repeated: 'Missing Description or aria-describedby for DialogContent'. Add <DialogDescription> or aria-describedby to each modal.", "selector": "DialogContent", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Sales Return", "issue": "posStore.finalize stores transaction header in db.transactions and line items in db.transaction_items separately. mockApi.listTransactions returns headers only. ReturnModal assumes header has .items — mismatch.", "affected_selectors": ["ReturnModal transaction list", "ReturnModal items list"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "FIX (HIGH PRIORITY): Make ReturnModal robust. Either (a) update mockApi.listTransactions to hydrate `items` per transaction from db.transaction_items (preferred), or (b) store the items array inline in db.transactions.add({...trx, items}) in posStore.finalize, or (c) defensively guard `(t.items || []).length` / `(selected?.items || []).map(...)` in ReturnModal. Best fix: hydrate items in listTransactions so retur data is real.",
+    "RETEST after fix: Alt+R full flow (pick original trx → tick qty → reason → Proses Retur → success toast), Alt+C Close Shift (Expected = opening + cash sales + pettyIn - pettyOut, enter actual, confirm → redirect to /login), Status bar contents (ONLINE/shift/session/user/trx#), F2 logout navigation, F12 sync toast.",
+    "Add DialogDescription (or aria-describedby) to every shadcn DialogContent to silence the Radix a11y warnings.",
+    "Consider replacing `let trxCounter = 1` module-level counter in posStore.js with a per-shift persistent counter — currently TRX numbering resets on full reload."
+  ],
+  "critical_code_review_comments": [
+    "posStore.finalize persists transaction.items into a sibling table (db.transaction_items) but ReturnModal/TransactionListModal expect them inline — data shape contract is inconsistent across modules. Choose one and document it.",
+    "ReturnModal.jsx has no defensive null checks on `selected.items` / `t.items` / `it.qty`. Any consumer that mis-shapes a transaction breaks the whole app.",
+    "POSPage.jsx is ~250 lines and owns 9 modal-open booleans + a 100-line keydown handler — consider extracting a useShortcuts hook and a useModalState reducer.",
+    "calcLine in posStore allows negative qty (RETURN mode) but `Math.max(0, gross - discAmt)` clamps line total to >= 0 regardless of sign — RETURN lineTotal will not be negative as expected.",
+    "trxCounter is in-memory only — page reload resets it to 1, risking duplicate trx numbers within a shift."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per instructions)", "frontend": "~80% (12/15 scenarios verified; 3 blocked by ReturnModal crash)"},
+  "test_credentials": "cashier / 1234 (used). manager / 9999 not tested.",
+  "seed_data_creation": "None — Dexie seedIfEmpty auto-seeds 25 products, 4 customers, 2 users on first load. IndexedDB + localStorage were cleared before tests.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After fix: clear IndexedDB+localStorage, login cashier/1234, open shift 500000, scan 8991111000011 + 8990000000226, pay cash. Then press Alt+R — modal must open without crashing and the just-paid transaction must appear in the left list WITH items visible on the right. Then test Alt+C and verify Expected Cash math, then submit and ensure redirect to /login. Also recheck StatusBar, F12 toast, F2 logout — they are likely fine, they only failed in iteration_1 because the React tree was crashed by ReturnModal.",
+  "rca of the issue": "ReturnModal.jsx line 85 reads `t.items.length` for every transaction returned by api.listTransactions(). api.listTransactions reads db.transactions only (mockApi.js line 55). posStore.finalize (posStore.js lines 162-178) builds `trx` without an `items` field and persists the line items to db.transaction_items separately. Therefore every transaction header returned has items === undefined → reading .length throws → React unmounts the app → white screen. Reproduction: login → open shift → scan a product → pay → Alt+R. Mitigation: hydrate items in mockApi.listTransactions (await Promise.all(rows.map(async t => ({...t, items: await db.transaction_items.where('transactionId').equals(t.id).toArray()})))) OR persist items inline in db.transactions. Either change is sufficient."
+}

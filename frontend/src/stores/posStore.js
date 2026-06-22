@@ -1,0 +1,183 @@
+import { create } from 'zustand';
+import { db } from '../db/database';
+import { uid, nowISO } from '../lib/format';
+
+const calcLine = (it) => {
+  const gross = (Number(it.qty) || 0) * (Number(it.unitPrice) || 0);
+  const discAmt =
+    (Number(it.discPct) || 0) > 0
+      ? gross * ((Number(it.discPct) || 0) / 100)
+      : Number(it.discAmount) || 0;
+  return Math.max(0, gross - discAmt);
+};
+
+const recompute = (items) => items.map((it) => ({ ...it, lineTotal: calcLine(it) }));
+
+let trxCounter = 1;
+const newTrxNumber = () => {
+  const d = new Date();
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  const n = String(trxCounter++).padStart(4, '0');
+  return `TRX-${ymd}-${n}`;
+};
+
+export const usePosStore = create((set, get) => ({
+  trxNumber: newTrxNumber(),
+  items: [],
+  qty: 1,
+  selectedIndex: -1,
+  customer: null, // {id, memberNumber, name, phone, address}
+  deliveryMethod: 'TAKE AWAY',
+  pendingList: [],
+  mode: 'SALE', // SALE | RETURN
+
+  setQty: (q) => set({ qty: Math.max(1, Number(q) || 1) }),
+  setSelectedIndex: (i) => set({ selectedIndex: i }),
+  setDelivery: (m) => set({ deliveryMethod: m }),
+  setCustomer: (c) => set({ customer: c }),
+  setMode: (m) => set({ mode: m }),
+
+  addByBarcode: async (barcode) => {
+    if (!barcode) return { ok: false, error: 'Barcode kosong' };
+    const p = await db.products.where('barcode').equals(barcode.trim()).first();
+    if (!p) return { ok: false, error: `Produk tidak ditemukan: ${barcode}` };
+    const { qty, items, mode } = get();
+    const sign = mode === 'RETURN' ? -1 : 1;
+    // Stack same product
+    const idx = items.findIndex((it) => it.productId === p.id && it.discPct === 0 && it.discAmount === 0);
+    let next;
+    if (idx >= 0) {
+      next = [...items];
+      next[idx] = { ...next[idx], qty: next[idx].qty + sign * qty };
+    } else {
+      next = [
+        ...items,
+        {
+          id: uid(),
+          productId: p.id,
+          barcode: p.barcode,
+          name: p.name,
+          unit: p.unit,
+          qty: sign * qty,
+          unitPrice: p.price,
+          discPct: 0,
+          discAmount: 0,
+          lineTotal: 0,
+        },
+      ];
+    }
+    set({ items: recompute(next), qty: 1, selectedIndex: (idx >= 0 ? idx : next.length - 1) });
+    return { ok: true, product: p };
+  },
+
+  addProduct: (p, qtyOverride) => {
+    const { items, qty, mode } = get();
+    const sign = mode === 'RETURN' ? -1 : 1;
+    const useQty = (qtyOverride ?? qty) * sign;
+    const next = [
+      ...items,
+      {
+        id: uid(),
+        productId: p.id,
+        barcode: p.barcode,
+        name: p.name,
+        unit: p.unit,
+        qty: useQty,
+        unitPrice: p.price,
+        discPct: 0,
+        discAmount: 0,
+        lineTotal: 0,
+      },
+    ];
+    set({ items: recompute(next), qty: 1, selectedIndex: next.length - 1 });
+  },
+
+  updateItem: (id, patch) => {
+    const next = get().items.map((it) => (it.id === id ? { ...it, ...patch } : it));
+    set({ items: recompute(next) });
+  },
+
+  removeItem: (id) => {
+    const next = get().items.filter((it) => it.id !== id);
+    set({ items: next, selectedIndex: Math.min(get().selectedIndex, next.length - 1) });
+  },
+
+  cancelTransaction: () => set({ items: [], qty: 1, selectedIndex: -1, customer: null, deliveryMethod: 'TAKE AWAY', mode: 'SALE', trxNumber: newTrxNumber() }),
+
+  totals: () => {
+    const items = get().items;
+    const totalQty = items.reduce((s, it) => s + (Number(it.qty) || 0), 0);
+    const subtotal = items.reduce((s, it) => s + (Number(it.qty) || 0) * (Number(it.unitPrice) || 0), 0);
+    const lineTotal = items.reduce((s, it) => s + (Number(it.lineTotal) || 0), 0);
+    const discount = subtotal - lineTotal;
+    return { totalQty, subtotal, discount, grandTotal: lineTotal };
+  },
+
+  savePending: async () => {
+    const { items, customer, deliveryMethod, trxNumber } = get();
+    if (items.length === 0) return { ok: false, error: 'Transaksi kosong' };
+    const rec = {
+      id: uid(),
+      trxNumber,
+      items,
+      customer,
+      deliveryMethod,
+      createdAt: nowISO(),
+    };
+    await db.pending_transactions.add(rec);
+    set({ items: [], customer: null, deliveryMethod: 'TAKE AWAY', selectedIndex: -1, trxNumber: newTrxNumber() });
+    return { ok: true };
+  },
+
+  loadPending: async () => {
+    const list = await db.pending_transactions.orderBy('createdAt').reverse().toArray();
+    set({ pendingList: list });
+    return list;
+  },
+
+  resumePending: async (id) => {
+    const rec = await db.pending_transactions.get(id);
+    if (!rec) return;
+    set({
+      items: recompute(rec.items),
+      customer: rec.customer || null,
+      deliveryMethod: rec.deliveryMethod || 'TAKE AWAY',
+      trxNumber: rec.trxNumber,
+      selectedIndex: rec.items.length - 1,
+    });
+    await db.pending_transactions.delete(id);
+    await get().loadPending();
+  },
+
+  deletePending: async (id) => {
+    await db.pending_transactions.delete(id);
+    await get().loadPending();
+  },
+
+  finalize: async ({ payments, shiftId, cashierId }) => {
+    const { items, customer, deliveryMethod, trxNumber, mode } = get();
+    const t = get().totals();
+    const paid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const change = Math.max(0, paid - t.grandTotal);
+    const trx = {
+      id: uid(),
+      trxNumber,
+      shiftId,
+      cashierId,
+      type: mode,
+      customer,
+      deliveryMethod,
+      payments,
+      paid,
+      change,
+      ...t,
+      status: 'COMPLETED',
+      createdAt: nowISO(),
+    };
+    await db.transactions.add(trx);
+    await db.transaction_items.bulkAdd(items.map((it) => ({ ...it, transactionId: trx.id })));
+    await db.sync_queue.add({ entity: 'transactions', op: 'create', refId: trx.id, createdAt: nowISO() });
+    set({ items: [], customer: null, deliveryMethod: 'TAKE AWAY', selectedIndex: -1, mode: 'SALE', trxNumber: newTrxNumber() });
+    return trx;
+  },
+}));
