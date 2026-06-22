@@ -1,0 +1,47 @@
+{
+  "summary": "Retest of Membership Auto-Enrol after main agent applied normalizePhone() fix in /app/frontend/src/lib/format.js and consistently used it in both read (mockApi.lookupCustomer) and write (mockApi.upsertMemberFromContact) paths. All 9 scenarios + the leading-whitespace cosmetic fix verified end-to-end in a SINGLE Playwright session (so created members survive between assertions). 15/15 assertions PASS. The blocker bug identified in iteration_5 is resolved.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "SendReceiptModal -> DialogContent",
+        "issues": ["Carry-over a11y console warning: 'Missing Description or aria-describedby={undefined} for DialogContent' — cosmetic, console-only, not blocking. Could be silenced by adding <DialogDescription> inside the modal."]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_5.json (previous iteration with RCA)"
+  ],
+  "action_items": [
+    "(LOW) Add <DialogDescription> to SendReceiptModal to silence Radix a11y warning."
+  ],
+  "critical_code_review_comments": [
+    "FIX VERIFIED: /app/frontend/src/lib/format.js now exports normalizePhone(s) = strip non-digits + leading 0->62. Both mockApi.lookupCustomer (line 39, 41) and mockApi.upsertMemberFromContact (line 64, 68) call normalizePhone() on both sides of every phone comparison. Net effect: '08570000123', '+628570000123' and '628570000123' all match the same record — confirmed by S4 re-lookup (green M-0005) and IDEM scenario (2 clicks => only +1 customer).",
+    "FIX VERIFIED: SendReceiptModal.jsx now derives chatBody by trimStart-ing each line of renderReceiptText output, then uses it as the body for wa.me, mailto and the /api/receipt/send POST. Decoded wa.me text now starts with 'TOKO MAJU JAYA\\n...' (first char non-space) — was '         TOKO MAJU JAYA' before.",
+    "Idempotency confirmed at DB level: customer count grew by exactly 1 after two consecutive send-wa-link-btn clicks on the same fresh phone (08599998888 -> M-0008, second click was a no-op upsert).",
+    "API path (S7) auto-enrols BEFORE the backend 501 — observed two toasts in order: 'Member baru: M-0007 — PELANGGAN 5001' AND 'API belum aktif — set env: TWILIO_*'. Good ordering: ensureMember() awaited before fetch().",
+    "S5 verified in IndexedDB: transactions store latest row has customer = {memberNumber:'M-0005', name:'PELANGGAN 0123', phone:'+628570000123'} — proves api.updateTransactionCustomer wires through correctly.",
+    "Note: stored customer.phone is still the '+628570000123' form (the cashier-supplied + the prefix). Lookups now work regardless because normalizePhone strips '+'. If main agent ever wants to canonicalise storage too, write `phone: '+'+normalizePhone(phone)` in upsertMemberFromContact line 90 — current behaviour is fine."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend only)", "frontend": "15/15 assertions across 9 scenarios = 100%"},
+  "test_credentials": "cashier / 1234 (works)",
+  "seed_data_creation": "IndexedDB + localStorage cleared before run. seedIfEmpty repopulated M-0001..M-0004. Test run additionally created M-0005 (PELANGGAN 0123 / +628570000123), M-0006 (newbuyer@example.com), M-0007 (PELANGGAN 5001 / +628512345001), M-0008 (PELANGGAN 8888 / +628599998888). Phone 08577777777 did NOT create a member (enrol OFF), as expected.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Membership Auto-Enrol feature is fully working as of iteration_6. Phone normalization uses /app/frontend/src/lib/format.js -> normalizePhone(). Future tests should: (1) clear IndexedDB at start of each run because seed only creates 4 customers, (2) keep all auto-enrol assertions inside ONE Playwright run because reload re-seeds, (3) detect pill color via send-member-status className substring ('emerald'|'amber'|'slate'), (4) listen for popups (page.on('popup', close)) when clicking wa-link or mailto buttons, (5) use sonner toast text via Array.from(document.querySelectorAll('[data-sonner-toast], li[role=\\\"status\\\"], ol li')).",
+  "scenario_results": {
+    "S1_empty_slate": "PASS",
+    "S2_existing_M0001_green": "PASS",
+    "S3_new_phone_amber": "PASS",
+    "S4_wa_create_then_relookup_green": "PASS (M-0005 created and re-lookup turns GREEN — the iter_5 blocker is FIXED)",
+    "S5_transaction_customer_updated": "PASS (trx.customer.memberNumber === M-0005)",
+    "S6_email_create_and_relookup_green": "PASS (M-0006 newbuyer@example.com)",
+    "S7_api_path_creates_member_before_501": "PASS (M-0007, then 501 toast)",
+    "S8_enrol_off_no_member_no_toast_still_amber": "PASS (customers count unchanged 7->7)",
+    "S9_wa_chatbody_first_char_non_space": "PASS (decoded body starts with 'TOKO MAJU JAYA')",
+    "S_IDEM_two_clicks_one_customer": "PASS (pre=7 post=8, delta=1)"
+  }
+}

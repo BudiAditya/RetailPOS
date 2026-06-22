@@ -2,7 +2,7 @@
 // This module exists to keep the "REST + JWT" abstraction intact for future swap-in.
 
 import { db } from '../db/database';
-import { uid, nowISO } from '../lib/format';
+import { uid, nowISO, normalizePhone } from '../lib/format';
 
 const TOKEN_KEY = 'pos-jwt';
 
@@ -36,10 +36,17 @@ export const api = {
     if (!q) return null;
     const byMember = await db.customers.where('memberNumber').equals(q).first();
     if (byMember) return byMember;
-    const byPhone = await db.customers.where('phone').equals(q).first();
-    if (byPhone) return byPhone;
-    const byEmail = await db.customers.filter((c) => (c.email || '').toLowerCase() === q.toLowerCase()).first();
-    return byEmail || null;
+    const qd = normalizePhone(q);
+    if (qd) {
+      const byPhone = await db.customers.filter((c) => normalizePhone(c.phone) === qd).first();
+      if (byPhone) return byPhone;
+    }
+    const ql = (q || '').trim().toLowerCase();
+    if (ql.includes('@')) {
+      const byEmail = await db.customers.filter((c) => (c.email || '').toLowerCase() === ql).first();
+      if (byEmail) return byEmail;
+    }
+    return null;
   },
 
   async nextMemberNumber() {
@@ -54,11 +61,11 @@ export const api = {
   // Upsert a member from contact info captured at checkout.
   // Returns { customer, created: boolean }
   async upsertMemberFromContact({ phone, email, name, address }) {
-    const phoneNorm = (phone || '').replace(/[^\d]/g, '');
+    const phoneNorm = normalizePhone(phone || '');
     const emailNorm = (email || '').trim().toLowerCase();
     let existing = null;
     if (phoneNorm) {
-      existing = await db.customers.filter((c) => (c.phone || '').replace(/[^\d]/g, '') === phoneNorm).first();
+      existing = await db.customers.filter((c) => normalizePhone(c.phone) === phoneNorm).first();
     }
     if (!existing && emailNorm) {
       existing = await db.customers.filter((c) => (c.email || '').toLowerCase() === emailNorm).first();

@@ -32,6 +32,12 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
   const canvasRef = React.useRef(null);
 
   const text = React.useMemo(() => (trx ? renderReceiptText(trx, store) : ''), [trx, store]);
+  // For wa.me / mailto / API body, strip leading whitespace per line so the
+  // header reads naturally inside a chat-style monospace preview.
+  const chatBody = React.useMemo(
+    () => text.split('\n').map((l) => l.replace(/^ +/, '')).join('\n'),
+    [text],
+  );
   const subject = React.useMemo(() => (trx ? `Struk ${trx.trxNumber} — ${store.name}` : 'Struk'), [trx, store]);
 
   // Prefill phone / email from customer if available
@@ -94,8 +100,8 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
 
   if (!trx) return null;
 
-  const waUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(text)}`;
-  const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+  const waUrl = `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(chatBody)}`;
+  const mailtoUrl = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(chatBody)}`;
 
   const sendViaApi = async () => {
     if (!to.trim()) return toast.error(channel === 'whatsapp' ? 'Masukkan nomor WhatsApp.' : 'Masukkan alamat email.');
@@ -108,7 +114,7 @@ export default function SendReceiptModal({ open, onOpenChange, trx, store = DEFA
         body: JSON.stringify({
           channel,
           to: channel === 'whatsapp' ? `+${normalizedPhone}` : to.trim(),
-          body: text,
+          body: chatBody,
           subject,
           trx_number: trx.trxNumber,
         }),
